@@ -20,8 +20,37 @@ y_range_index = 1          # Amplitude scale starting index
 
 # Definir funções
 
-def read_and_display()
-    
+def read_samples()
+    self.samples = tft.read_adc(240, x_range[x_range_index] * x_div)
+        
+    if sys.implementation.name == "micropython":
+        convert_sample = lambda sample: 0.012049 * sample - 24.059 # IoT 0003.03
+    else:
+        convert_sample = lambda sample: 0.0129 * sample - 26.62 # Simulator
+        
+    self.amplitudes = [convert_sample(sample) for sample in self.samples]
+
+def read_and_display_time()
+    reset_display
+    x, y = [], []
+
+    read_samples
+
+    # Plot sampled values in the current X and Y scale
+    y_div_factor = y_range[y_range_index] * y_div / (height - 16)
+    x = list(range(len(amplitudes)))
+    y = [
+        round(max(0, min((height - 16) / 2 + value / y_div_factor, height - 16)))
+        for value in amplitudes
+    ]
+    tft.display_nline(tft.YELLOW, x, y) # Display the plot
+
+
+def reset_display()
+    tft.display_set(tft.BLACK, 0, 0, width, height)         # Erase display
+    tft.set_wifi_icon(width - 16, 0)                        # Set wifi icon
+    # por tambem as escalas
+    # agora temos 2 casos, ou é tempo ou é frequencia
 
 #def send_email()
     
