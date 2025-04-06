@@ -20,6 +20,7 @@ y_range_index = 1          # Amplitude scale starting index
 
 # Definir funções
 
+""""
 def read_samples()
     self.samples = tft.read_adc(240, x_range[x_range_index] * x_div)
         
@@ -45,12 +46,14 @@ def read_and_display_time()
     ]
     tft.display_nline(tft.YELLOW, x, y) # Display the plot
 
-
-def reset_display()
+"""
+def reset_display():
     tft.display_set(tft.BLACK, 0, 0, width, height)         # Erase display
     tft.set_wifi_icon(width - 16, 0)                        # Set wifi icon
     # por tambem as escalas
-    # agora temos 2 casos, ou é tempo ou é frequencia
+    # agora temos 2 casos, ou é tempo ou é frequencia"
+
+
 
 #def send_email()
     
@@ -70,7 +73,8 @@ def reset_display()
 # Programa principal (main)
 
 # Passo 1: Inicializar o display apagando-o:
-read_and_display()      
+#read_and_display_time()      
+reset_display()
 
 # Passo 2: Desenhar a grelha, as escalas e o icon WiFi;
 # Passo 3: Realizar uma leitura de valores do ADC, convertê-los para tensões e representar a forma de onda sobre a grelha;
@@ -81,7 +85,8 @@ while tft.working():
     if but!=tft.NOTHING:
         print("Button pressed:", but)
         if but == 11:                  # Fast click button 1
-            read_and_display()
+            #read_and_display_time()
+            reset_display()
         if but == 12:                  # Long click button 1
             send_email()
         if but == 13:                  # Double click button 1
