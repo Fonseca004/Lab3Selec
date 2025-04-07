@@ -34,7 +34,8 @@ def read_display(x_range_index, y_range_index):
     for n in range(width):
         # Converte valor do ADC em Volt
         # V = 0.00044028 * pontos_adc[n] + 0.091455 (Calibração do professor)
-        V = 0.0004313133*pontos_adc[n]+0.10264  # Nossa calibração
+        #V = 0.0004313133*pontos_adc[n]+0.10264  # Nossa calibração - RAFA
+        V = 0.00044028 * pontos_adc[n] + 0.1671
         V = V - 1                                 # Tensão entrada de referência de 1V
         V = V / fator                             # Entra com o efeito do div. resistivo
         tensoes_aux[n] = V
@@ -157,11 +158,26 @@ def apply_filter(input_signal):
 
     return output_signal
 
+def auto_scale(v_max, v_min):
+    aux = (v_max - v_min)/6
+    if(y_range[0] > aux):
+        return 0
+    elif(y_range[1] > aux):
+        return 1
+    elif(y_range[2] > aux):
+        return 2
+    else:
+        return 3
+
+
 def LPF_Filter(max_value, min_value, med_value, rms_value, tensoes_array):
     # Aplica o filtro
     filtrado = apply_filter(tensoes_array)
 
-    # Variáveis para display
+    # Realiza o ajuste automático da escala vertical
+    y_range_index = auto_scale(max_value, min_value)
+
+    # Variáveis para o display
     x = []
     y = []
 
@@ -169,6 +185,7 @@ def LPF_Filter(max_value, min_value, med_value, rms_value, tensoes_array):
         V = filtrado[n]
         pixel = (height - 16)/2 + 16 + ((height - 16)/(6*y_range[y_range_index])) * V
 
+        # Respeita os limites de altura
         if pixel > height:
             pixel = height
         if pixel < 16:
@@ -177,7 +194,7 @@ def LPF_Filter(max_value, min_value, med_value, rms_value, tensoes_array):
         x.append(n)
         y.append(round(pixel))
 
-    # Redesenha o display com sinal filtrado
+    # Redesenha o display com o sinal filtrado
     tft.display_set(tft.BLACK, 0, 0, width, height)  # Apaga display
     tft.display_write_grid(0, 16, width, height - 16, 10, 6, tft.GREY1, tft.GREY2)  # Grelha
     tft.set_wifi_icon(width - 16, 0)  # Ícone WiFi
