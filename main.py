@@ -21,32 +21,7 @@ fator = 1/29.3  # Fator do divisor resistivo
 
 # Definir funções
 
-""""
-def read_samples()
-    self.samples = tft.read_adc(240, x_range[x_range_index] * x_div)
-        
-    if sys.implementation.name == "micropython":
-        convert_sample = lambda sample: 0.012049 * sample - 24.059 # IoT 0003.03
-    else:
-        convert_sample = lambda sample: 0.0129 * sample - 26.62 # Simulator
-        
-    self.amplitudes = [convert_sample(sample) for sample in self.samples]
 
-def read_and_display_time()
-    reset_display
-    x, y = [], []
-
-    read_samples
-
-    # Plot sampled values in the current X and Y scale
-    y_div_factor = y_range[y_range_index] * y_div / (height - 16)
-    x = list(range(len(amplitudes)))
-    y = [
-        round(max(0, min((height - 16) / 2 + value / y_div_factor, height - 16)))
-        for value in amplitudes
-    ]
-    tft.display_nline(tft.YELLOW, x, y) # Display the plot
-"""
 def read_display(x_range_index, y_range_index):
     pontos_adc = tft.read_adc(width, x_range[x_range_index]*10)
     tensoes_aux = pontos_adc
@@ -122,6 +97,103 @@ def x_scale(x_range_index):
         x_range_index = 3
     return x_range_index
 
+def dft(amplitudes):
+    N = len(amplitudes)
+    mag = [0.0] * N
+
+    for k in range(N // 2 - 1):
+        real, imag = 0.0, 0.0
+        for n in range(N):
+            theta = -2 * math.pi * k * n / N
+            real += amplitudes[n] * math.cos(theta)
+            imag += amplitudes[n] * math.sin(theta)
+
+        magnitude = math.sqrt(real ** 2 + imag ** 2) / N
+        if k != 0:
+            magnitude *= 2
+
+        # Duplicate magnitude values for smoother visualization (240 samples)
+        mag[2 * k] = magnitude
+        mag[2 * k + 1] = magnitude
+
+    return mag
+
+def freq_display(max_value, min_value, med_value, rms_value, tensoes_array):
+    """
+    Displays the frequency spectrum of the signal on the TFT display.
+    """
+    spectrum = dft(tensoes_array)
+    max_magnitude = max(spectrum) or 1  # Prevent division by zero
+
+    x = []
+    y = []
+
+    for n in range(width):  # width = 240
+        magnitude = spectrum[n]
+        pixel = (height - 16) + 16 - ((height - 16) * magnitude / max_magnitude)
+        pixel = min(max(16, pixel), height)  # Clamp within bounds
+        x.append(n)
+        y.append(round(pixel))
+
+    # Draw display
+    tft.display_set(tft.BLACK, 0, 0, width, height)
+    tft.display_write_grid(0, 16, width, height - 16, 10, 6, tft.GREY1, tft.GREY2)
+    tft.set_wifi_icon(width - 16, 0)
+    tft.display_write_str(tft.Arial16, "%d Hz/div" % x_range_freq[x_range_index], 0, 0)
+    tft.display_nline(tft.YELLOW, x, y)
+
+def apply_filter(input_signal):
+    """
+    Aplica um filtro IIR definido por:
+    y[n] = 0.03163 * x[n] - 0.03163 * x[n-2] + 1.9292 * y[n-1] - 0.93674 * y[n-2]
+
+    :param input_signal: Lista com os valores de entrada (x[n])
+    :return: Lista com os valores filtrados (y[n])
+    """
+    output_signal = [0.0] * len(input_signal)
+
+    for n in range(len(input_signal)):
+        x_n   = input_signal[n]
+        x_n_2 = input_signal[n - 2] if n >= 2 else 0.0
+        y_n_1 = output_signal[n - 1] if n >= 1 else 0.0
+        y_n_2 = output_signal[n - 2] if n >= 2 else 0.0
+
+        y_n = 0.03163 * x_n - 0.03163 * x_n_2 + 1.9292 * y_n_1 - 0.93674 * y_n_2
+        output_signal[n] = y_n
+
+    return output_signal
+
+def LPF_Filter(max_value, min_value, med_value, rms_value, tensoes_array):
+    # Aplica o filtro
+    filtrado = apply_filter(tensoes_array)
+
+    # Variáveis para display
+    x = []
+    y = []
+
+    for n in range(width):
+        V = filtrado[n]
+        pixel = (height - 16)/2 + 16 + ((height - 16)/(6*y_range[y_range_index])) * V
+
+        if pixel > height:
+            pixel = height
+        if pixel < 16:
+            pixel = 16
+
+        x.append(n)
+        y.append(round(pixel))
+
+    # Redesenha o display com sinal filtrado
+    tft.display_set(tft.BLACK, 0, 0, width, height)  # Apaga display
+    tft.display_write_grid(0, 16, width, height - 16, 10, 6, tft.GREY1, tft.GREY2)  # Grelha
+    tft.set_wifi_icon(width - 16, 0)  # Ícone WiFi
+    tft.display_write_str(tft.Arial16, "%d ms/div" % x_range[x_range_index], 0, 0)
+    tft.display_write_str(tft.Arial16, "%d V/div" % y_range[y_range_index], 80, 0)
+
+    # Desenha o sinal filtrado
+    tft.display_nline(tft.GREEN, x, y)  # Usamos VERDE para distinguir o sinal filtrado
+
+
 # Programa principal (main)
 
 # Passo 1: Inicializar o display apagando-o:
@@ -141,7 +213,7 @@ while tft.working():
         if but == 12:                  # Long click button 1
             send_email(max_value, min_value, med_value, rms_value, tensoes_array)
         if but == 13:                  # Double click button 1
-            write_to_display()
+            LPF_Filter(max_value, min_value, med_value, rms_value, tensoes_array)
         if but == 21:                  # Fast click button 2
             y_range_index = y_scale(y_range_index)
             max_value, min_value, med_value, rms_value, tensoes_array = read_display(x_range_index, y_range_index)
@@ -149,5 +221,5 @@ while tft.working():
             x_range_index = x_scale(x_range_index)
             max_value, min_value, med_value, rms_value, tensoes_array = read_display(x_range_index, y_range_index)
         if but == 23:                  # Double click button 2
-            freq_display()
+            freq_display(max_value, min_value, med_value, rms_value, tensoes_array)
         else: print("Invalid button.")
