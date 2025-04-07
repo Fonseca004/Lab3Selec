@@ -16,7 +16,8 @@ x_range_freq = [240, 120, 60, 24] # Freq scale (Hz)
 x_range_index = 0          # Time scale starting index
 y_div = 6                  # Number of vertical divisions
 y_range = [1, 2, 5, 10]    # Amplitude scale (V)
-y_range_index = 1          # Amplitude scale starting index
+y_range_index = 0          # Amplitude scale starting index
+fator = 1/29.3  # Fator do divisor resistivo
 
 # Definir funções
 
@@ -45,36 +46,87 @@ def read_and_display_time()
         for value in amplitudes
     ]
     tft.display_nline(tft.YELLOW, x, y) # Display the plot
-
 """
-def reset_display():
-    tft.display_set(tft.BLACK, 0, 0, width, height)         # Erase display
-    tft.set_wifi_icon(width - 16, 0)                        # Set wifi icon
-    # por tambem as escalas
-    # agora temos 2 casos, ou é tempo ou é frequencia"
+def read_display(x_range_index, y_range_index):
+    pontos_adc = tft.read_adc(width, x_range[x_range_index]*10)
+    tensoes_aux = pontos_adc
+    Vmax = 0
+    Vmin = 0
+    Vmed = 0
+    Vrms = 0
+    x = []
+    y = []
+    for n in range(width):
+        # Converte valor do ADC em Volt
+        # V = 0.00044028 * pontos_adc[n] + 0.091455 (Calibração do professor)
+        V = 0.0004313133*pontos_adc[n]+0.10264  # Nossa calibração
+        V = V - 1                                 # Tensão entrada de referência de 1V
+        V = V / fator                             # Entra com o efeito do div. resistivo
+        tensoes_aux[n] = V
+        pixel = (height - 16)/2 + 16 + ((height - 16)/(6*y_range[y_range_index])) * V
+        if pixel > height:  # Quando o valor excede o espaço vertical superior simplesmente fica no limite superior do display
+            pixel = height
+        if pixel < 16:   # Quando o valor excede o espaço vertical inferior simplesmente fica no limite inferior do display
+            pixel = 16
 
+        x.append(n)
+        y.append(round(pixel))
 
+        if n == 0:       # Caso seja o primeiro ponto
+            Vmax = Vmin = Vmed = Vrms = V
+        else:
+            Vmed += V
+            if V > Vmax:
+                Vmax = V
+            if V < Vmin:
+                Vmin = V
 
-#def send_email()
-    
-#def write_to_display()
-    
-#def x_scale()
-#    global x_range_index
-#    x_range_index = (x_range_index + 1) % len(x_range)
-#    read_and_display()
-    
-#def y_scale()
-    
-#def freq_display()
-    
+    # se so quisermos ler (readOnly = 1), nao imprimimos no display
+    #if readOnly == 0:
+        # reiniciar display
+        tft.display_set(tft.BLACK, 0, 0, width, height)  # Apaga display
+        tft.display_write_grid(0, 16, width, height-16, 10, 6,
+                               tft.GREY1, tft.GREY2)  # Desenha grelha
+        tft.set_wifi_icon(width-16, 0)  # Adiciona wifi icon
+        # escrever a escala no topo
+        tft.display_write_str(tft.Arial16, "%d ms/div" %
+                              x_range[x_range_index], 0, 0)
+        tft.display_write_str(tft.Arial16, "%d V/div" %
+                              y_range[y_range_index], 45+35, 0)
+        # imprimir a forma de onda
+        tft.display_nline(tft.YELLOW, x, y)
 
+    Vrms = 0
+    for i in range(len(tensoes_aux)):
+        Vrms += (tensoes_aux[i]*tensoes_aux[i])
+
+    Vrms = math.sqrt(Vrms / len(tensoes_aux))
+
+    Vmed /= 240  # Divide pelo número de amostras
+
+    return Vmax, Vmin, Vmed, Vrms, tensoes_aux
+
+def send_email(max_value, min_value, med_value, rms_value, tensoes_array):
+    corpo_mail = "Lista de %d pontos em %.2f segundos.\n Vmax = %.3fV \n Vmin = %.3fV \n Vmed = %.3fV \n Vrms = %.3fV\n" % (width, (x_range[x_range_index]*10)*0.001, max_value, min_value, med_value, rms_value)
+    tft.send_mail(((x_range[x_range_index]*10)*0.001)/width, tensoes_array, corpo_mail, "jose.felix.da.fonseca@tecnico.ulisboa.pt,matilde.assis.nunes@tecnico.ulisboa.pt,rodrigo.moura@tecnico.ulisboa.pt")
+
+def y_scale(y_range_index):
+    y_range_index -= 1
+    if (y_range_index < 0):  # alterar a escala vertical de forma circular
+        y_range_index = 3
+    return y_range_index
+
+def x_scale(x_range_index):
+    x_range_index -= 1
+    if (x_range_index < 0):  # alterar a escala vertical de forma circular
+        x_range_index = 3
+    return x_range_index
 
 # Programa principal (main)
 
 # Passo 1: Inicializar o display apagando-o:
 #read_and_display_time()      
-reset_display()
+max_value, min_value, med_value, rms_value, tensoes_array = read_display(x_range_index, y_range_index)
 
 # Passo 2: Desenhar a grelha, as escalas e o icon WiFi;
 # Passo 3: Realizar uma leitura de valores do ADC, convertê-los para tensões e representar a forma de onda sobre a grelha;
@@ -85,16 +137,17 @@ while tft.working():
     if but!=tft.NOTHING:
         print("Button pressed:", but)
         if but == 11:                  # Fast click button 1
-            #read_and_display_time()
-            reset_display()
+            max_value, min_value, med_value, rms_value, tensoes_array = read_display(x_range_index, y_range_index)
         if but == 12:                  # Long click button 1
-            send_email()
+            send_email(max_value, min_value, med_value, rms_value, tensoes_array)
         if but == 13:                  # Double click button 1
             write_to_display()
         if but == 21:                  # Fast click button 2
-            x_scale()
+            y_range_index = y_scale(y_range_index)
+            max_value, min_value, med_value, rms_value, tensoes_array = read_display(x_range_index, y_range_index)
         if but == 22:                  # Long click button 2
-            y_scale()
+            x_range_index = x_scale(x_range_index)
+            max_value, min_value, med_value, rms_value, tensoes_array = read_display(x_range_index, y_range_index)
         if but == 23:                  # Double click button 2
             freq_display()
         else: print("Invalid button.")
