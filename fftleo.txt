@@ -1,0 +1,25 @@
+# Função para calcular a transformada de Fourier
+def fourier_transform():
+    N = len(tensoes)                                                                                  
+    X_k = [0] * N                                                     # Vetor para a transformada de Fourier
+
+    for k in range(0, N//2):                                          # Cálculo da transformada de Fourier
+        Re = 0 
+        Im = 0     
+        for n in range(N):
+            angle = 2 * math.pi * k * n / N
+            Re += tensoes[n] * math.cos(angle)
+            Im += - tensoes[n] * math.sin(angle)
+        X_k[k] = (math.sqrt(Re*2 + Im*2))
+
+    Xss = [0] * N                                                      # Vetor para transformada de Fourier normalizada                                  
+
+    for k in range(0, N//2):                                           # Normalização da transformada de Fourier
+        if k == 0:
+            Xss[2 * k] = X_k[k] / (N)
+            Xss[2 * k + 1] = X_k[k] / (N)
+        else:
+            Xss[2 * k] = 2 * X_k[k] / (N)
+            Xss[2 * k + 1] = 2 * X_k[k] / (N)
+        gc.collect()                                                   # Limpa a memória
+    return Xss                                                         # Retorna a transformada de Fourier normalizada

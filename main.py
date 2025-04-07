@@ -56,20 +56,17 @@ def read_display(x_range_index, y_range_index):
             if V < Vmin:
                 Vmin = V
 
-    # se so quisermos ler (readOnly = 1), nao imprimimos no display
-    #if readOnly == 0:
-        # reiniciar display
-        tft.display_set(tft.BLACK, 0, 0, width, height)  # Apaga display
-        tft.display_write_grid(0, 16, width, height-16, 10, 6,
-                               tft.GREY1, tft.GREY2)  # Desenha grelha
-        tft.set_wifi_icon(width-16, 0)  # Adiciona wifi icon
-        # escrever a escala no topo
-        tft.display_write_str(tft.Arial16, "%d ms/div" %
-                              x_range[x_range_index], 0, 0)
-        tft.display_write_str(tft.Arial16, "%d V/div" %
-                              y_range[y_range_index], 45+35, 0)
-        # imprimir a forma de onda
-        tft.display_nline(tft.YELLOW, x, y)
+    tft.display_set(tft.BLACK, 0, 0, width, height)  # Apaga display
+    tft.display_write_grid(0, 16, width, height-16, 10, 6,
+                            tft.GREY1, tft.GREY2)  # Desenha grelha
+    tft.set_wifi_icon(width-16, 0)  # Adiciona wifi icon
+    # escrever a escala no topo
+    tft.display_write_str(tft.Arial16, "%d ms/div" %
+                            x_range[x_range_index], 0, 0)
+    tft.display_write_str(tft.Arial16, "%d V/div" %
+                            y_range[y_range_index], 45+35, 0)
+    # imprimir a forma de onda
+    tft.display_nline(tft.YELLOW, x, y)
 
     Vrms = 0
     for i in range(len(tensoes_aux)):
@@ -128,11 +125,13 @@ def freq_display(max_value, min_value, med_value, rms_value, tensoes_array):
     x = []
     y = []
 
-    for n in range(width):  # width = 240
+    usable_height = height - 16
+    for n in range(width):
         magnitude = spectrum[n]
-        pixel = (height - 16) + 16 - ((height - 16) * magnitude / max_magnitude)
-        pixel = min(max(16, pixel), height)  # Clamp within bounds
-        x.append(n)
+        # Ajustando a escala para que as maiores magnitudes fiquem no topo
+        pixel = 16 + usable_height * (magnitude / max_magnitude)  # Maior magnitude vai para o topo
+        pixel = min(max(16, pixel), height)  # Respeitar os limites verticais
+        x.append(n)  # Ou x.append(width - 1 - n) para inverter o eixo X
         y.append(round(pixel))
 
     # Draw display
@@ -140,16 +139,11 @@ def freq_display(max_value, min_value, med_value, rms_value, tensoes_array):
     tft.display_write_grid(0, 16, width, height - 16, 10, 6, tft.GREY1, tft.GREY2)
     tft.set_wifi_icon(width - 16, 0)
     tft.display_write_str(tft.Arial16, "%d Hz/div" % x_range_freq[x_range_index], 0, 0)
+    tft.display_write_str(tft.Arial16, "%d V/div" % y_range[y_range_index], 45+35, 0)
     tft.display_nline(tft.YELLOW, x, y)
 
-def apply_filter(input_signal):
-    """
-    Aplica um filtro IIR definido por:
-    y[n] = 0.03163 * x[n] - 0.03163 * x[n-2] + 1.9292 * y[n-1] - 0.93674 * y[n-2]
 
-    :param input_signal: Lista com os valores de entrada (x[n])
-    :return: Lista com os valores filtrados (y[n])
-    """
+def apply_filter(input_signal):
     output_signal = [0.0] * len(input_signal)
 
     for n in range(len(input_signal)):
